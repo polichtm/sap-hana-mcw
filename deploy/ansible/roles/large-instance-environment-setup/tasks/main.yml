@@ -1,0 +1,11 @@
+---
+
+# Set up Hosts entries for the cluster nodes
+- name: Ensure the Primary(Second) node hosts entry exists
+  lineinfile:
+    path: /etc/hosts
+    state: present
+    insertafter: EOF
+    regexp: "{{ item.dbname }}"
+    line: "{{ item.ip_db_nic }} {{ item.dbname }}"
+  loop: "{{ hana_database.nodes }}"

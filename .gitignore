@@ -1,0 +1,27 @@
+#  Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# .tfvars files
+*.tfvars
+
+# .tfvars files - Allow in new structure
+!/**/terraform-units/**/*.tfvars
+
+# ignore key files
+**/tmp
+
+# ignore ansible retry files
+*.retry
+
+# ignore IDE files
+.idea/
+
+# service principal auth secrets
+set-sp.sh
+
+# ignore any clustering auth scripts
+set-clustering-auth*.sh

@@ -1,0 +1,7 @@
+---
+
+- import_tasks: pre_checks.yml
+
+- import_tasks: provision.yml
+
+- import_tasks: post_provision_report.yml
