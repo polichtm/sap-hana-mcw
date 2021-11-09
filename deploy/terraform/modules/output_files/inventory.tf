@@ -5,7 +5,7 @@
 # Generates the output JSON with IP address and disk details
 resource "local_file" "output-json" {
   content = jsonencode({
-    "infrastructure" = merge(var.infrastructure_w_defaults, { "iscsi" = { "iscsi_nic_ips" = [local.ips-iscsi] } })
+    "infrastructure" = var.infrastructure,
     "jumpboxes" = {
       "windows" = [for jumpbox-windows in var.jumpboxes.windows : {
         name                 = jumpbox-windows.name,
@@ -32,122 +32,57 @@ resource "local_file" "output-json" {
         }
       ]
     },
-    "databases" = flatten([
-      [
-        for database in local.databases : {
-          platform          = database.platform,
-          db_version        = database.db_version,
-          os                = database.os,
-          size              = database.size,
-          filesystem        = database.filesystem,
-          high_availability = database.high_availability,
-          instance          = database.instance,
-          authentication    = database.authentication,
-          credentials       = database.credentials,
-          components        = database.components,
-          xsa               = database.xsa,
-          shine             = database.shine,
-          nodes = [for ip-dbnode-admin in local.ips-dbnodes-admin : {
-            // Hostname is required for Ansible, therefore set dbname from resource name to hostname
-            dbname       = replace(local.hdb_vms[index(local.ips-dbnodes-admin, ip-dbnode-admin)].name, "_", "")
-            ip_admin_nic = ip-dbnode-admin,
-            ip_db_nic    = local.ips-dbnodes-db[index(local.ips-dbnodes-admin, ip-dbnode-admin)]
-            role         = local.hdb_vms[index(local.ips-dbnodes-admin, ip-dbnode-admin)].role
-            } if local.hdb_vms[index(local.ips-dbnodes-admin, ip-dbnode-admin)].platform == database.platform
-          ],
-          loadbalancer = {
-            frontend_ip = var.loadbalancers[0].private_ip_address
-          }
-        }
-        if database != {}
+    "databases" = [for database in var.databases : {
+      platform          = database.platform,
+      db_version        = database.db_version,
+      os                = database.os,
+      size              = database.size,
+      filesystem        = database.filesystem,
+      high_availability = database.high_availability,
+      instance          = database.instance,
+      authentication    = database.authentication,
+      credentials       = database.credentials,
+      components        = database.components,
+      xsa               = database.xsa,
+      shine             = database.shine,
+      nodes = [for ip-dbnode-admin in local.ips-dbnodes-admin : {
+        dbname       = local.dbnodes[index(local.ips-dbnodes-admin, ip-dbnode-admin)].name
+        ip_admin_nic = ip-dbnode-admin,
+        ip_db_nic    = local.ips-dbnodes-db[index(local.ips-dbnodes-admin, ip-dbnode-admin)],
+        role         = local.dbnodes[index(local.ips-dbnodes-admin, ip-dbnode-admin)].role
+        } if local.dbnodes[index(local.ips-dbnodes-admin, ip-dbnode-admin)].platform == database.platform
       ],
-      [
-        for database in local.anydatabases : {
-          platform          = database.platform,
-          db_version        = database.db_version,
-          os                = database.os,
-          size              = database.size,
-          filesystem        = database.filesystem,
-          high_availability = database.high_availability,
-          authentication    = database.authentication,
-          credentials       = database.credentials,
-          nodes = [for ip-anydbnode in local.ips-anydbnodes : {
-            # Check for maximum length and for "_"
-            dbname    = substr(replace(local.anydb_vms[index(local.ips-anydbnodes, ip-anydbnode)].name, "_", ""), 0, 13)
-            ip_db_nic = local.ips-anydbnodes[index(local.ips-anydbnodes, ip-anydbnode)],
-            role      = local.anydb_vms[index(local.ips-anydbnodes, ip-anydbnode)].role
-            } if upper(local.anydb_vms[index(local.ips-anydbnodes, ip-anydbnode)].platform) == upper(database.platform)
-          ],
-          loadbalancer = {
-            frontend_ip = var.anydb-loadbalancers[0].private_ip_address
-          }
-        }
-        if database != {}
-      ]
-      ]
-    ),
-    "software" = merge(var.software_w_defaults, {
-      storage_account_sapbits = {
-        name                = var.storage-sapbits[0].name,
-        storage_access_key  = var.storage-sapbits[0].primary_access_key,
-        file_share_name     = var.software_w_defaults.storage_account_sapbits.file_share_name
-        blob_container_name = var.software_w_defaults.storage_account_sapbits.blob_container_name
+      loadbalancer = {
+        frontend_ip = var.loadbalancers[index(var.databases, database)].private_ip_address
       }
-    })
+      }
+    ],
+    "software" = {
+      "storage_account_sapbits" = {
+        "name"                = var.storage-sapbits[0].name,
+        "storage_access_key"  = var.storage-sapbits[0].primary_access_key,
+        "blob_container_name" = lookup(var.software.storage_account_sapbits, "blob_container_name", null)
+        "file_share_name"     = lookup(var.software.storage_account_sapbits, "file_share_name", null)
+      },
+      "downloader" = var.software.downloader
+    }
     "options" = var.options
     }
   )
-  filename             = "${terraform.workspace}/ansible_config_files/output.json"
-  file_permission      = "0660"
-  directory_permission = "0770"
+  filename = "${path.root}/../ansible_config_files/output.json"
 }
 
 # Generates the Ansible Inventory file
 resource "local_file" "ansible-inventory" {
   content = templatefile("${path.module}/ansible_inventory.tmpl", {
-    iscsi                 = var.infrastructure_w_defaults.iscsi,
     jumpboxes-windows     = var.jumpboxes.windows,
     jumpboxes-linux       = var.jumpboxes-linux,
-    ips-iscsi             = local.ips-iscsi,
     ips-jumpboxes-windows = local.ips-jumpboxes-windows,
     ips-jumpboxes-linux   = local.ips-jumpboxes-linux,
     ips-dbnodes-admin     = local.ips-dbnodes-admin,
     ips-dbnodes-db        = local.ips-dbnodes-db,
-    dbnodes               = local.hdb_vms,
-    application           = var.application,
-    ips-scs               = local.ips-scs,
-    ips-app               = local.ips-app,
-    ips-web               = local.ips-web
-    anydbnodes            = local.anydb_vms,
-    ips-anydbnodes        = local.ips-anydbnodes
+    dbnodes               = local.dbnodes
     }
   )
-  filename             = "${terraform.workspace}/ansible_config_files/hosts"
-  file_permission      = "0660"
-  directory_permission = "0770"
-}
-
-# Generates the Ansible Inventory file
-resource "local_file" "ansible-inventory-yml" {
-  content = templatefile("${path.module}/ansible_inventory.yml.tmpl", {
-    iscsi                 = var.infrastructure_w_defaults.iscsi,
-    jumpboxes-windows     = var.jumpboxes.windows,
-    jumpboxes-linux       = var.jumpboxes-linux,
-    ips-iscsi             = local.ips-iscsi,
-    ips-jumpboxes-windows = local.ips-jumpboxes-windows,
-    ips-jumpboxes-linux   = local.ips-jumpboxes-linux,
-    ips-dbnodes-admin     = local.ips-dbnodes-admin,
-    ips-dbnodes-db        = local.ips-dbnodes-db,
-    dbnodes               = local.hdb_vms,
-    application           = var.application,
-    ips-scs               = local.ips-scs,
-    ips-app               = local.ips-app,
-    ips-web               = local.ips-web
-    anydbnodes            = local.anydb_vms,
-    ips-anydbnodes        = local.ips-anydbnodes
-    }
-  )
-  filename             = "${terraform.workspace}/ansible_config_files/hosts.yml"
-  file_permission      = "0660"
-  directory_permission = "0770"
+  filename = "${path.root}/../ansible_config_files/hosts"
 }
