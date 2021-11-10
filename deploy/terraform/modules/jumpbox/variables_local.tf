@@ -26,6 +26,18 @@ variable "random-id" {
   description = "Random hex for creating unique Azure key vault name"
 }
 
+# Set defaults
+locals {
+
+  # Management subnet
+  sub_mgmt_exists = try(var.infrastructure.vnets.management.subnet_mgmt.is_existing, false)
+
+  # Management NSG
+  sub_mgmt_nsg_exists      = try(var.infrastructure.vnets.management.subnet_mgmt.nsg.is_existing, false)
+  sub_mgmt_nsg_allowed_ips = local.sub_mgmt_nsg_exists ? [] : try(var.infrastructure.vnets.management.subnet_mgmt.nsg.allowed_ips, ["0.0.0.0/0"])
+
+}
+
 locals {
   output-tf = jsondecode(var.output-json.content)
 
@@ -41,13 +53,11 @@ locals {
   ]
 
   # RTI information with default count 1
-  rti = length([
-    for jumpbox in var.jumpboxes.linux : jumpbox
+  rti_updated = [
+    for jumpbox in var.jumpboxes.linux : merge({ "private_ip_address" = "" }, jumpbox)
     if jumpbox.destroy_after_deploy == "true"
-    ]) > 0 ? [
-    for jumpbox in var.jumpboxes.linux : jumpbox
-    if jumpbox.destroy_after_deploy == "true"
-    ] : [
+  ]
+  rti = length(local.rti_updated) > 0 ? local.rti_updated : [
     {
       "name"                 = "rti",
       "destroy_after_deploy" = "true",
@@ -64,15 +74,8 @@ locals {
       },
       "components" = [
         "ansible"
-      ]
+      ],
+      "private_ip_address" = ""
     }
   ]
-
-  hana-sid = length([
-    for database in var.databases : database
-    if database.platform == "HANA"
-    ]) > 0 ? element([
-    for database in var.databases : database.instance.sid
-    if database.platform == "HANA"
-  ], 0) : ""
 }

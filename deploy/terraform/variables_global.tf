@@ -1,9 +1,16 @@
+variable "application" {
+  description = "Details of the Application layer"
+  default     = {}
+}
+
 variable "databases" {
   description = "Details of the HANA database nodes"
+  default     = []
 }
 
 variable "infrastructure" {
   description = "Details of the Azure infrastructure to deploy the SAP landscape into"
+  default     = {}
 }
 
 variable "jumpboxes" {
@@ -12,6 +19,7 @@ variable "jumpboxes" {
 
 variable "options" {
   description = "Configuration options"
+  default     = {}
 }
 
 variable "software" {
@@ -25,4 +33,8 @@ variable "ssh-timeout" {
 
 variable "sshkey" {
   description = "Details of ssh key pair"
+  default = {
+    path_to_public_key  = "~/.ssh/id_rsa.pub",
+    path_to_private_key = "~/.ssh/id_rsa"
+  }
 }
