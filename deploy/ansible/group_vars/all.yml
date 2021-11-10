@@ -13,3 +13,4 @@ hana_database: "{{ hostvars['localhost'].hana_database }}"
 linux_jumpboxes: "{{ hostvars['localhost'].output.jumpboxes.linux }}"
 windows_jumpboxes: "{{ hostvars['localhost'].output.jumpboxes.windows }}"
 jumpbox_comp_dict: {}
+configs_path: ".."
